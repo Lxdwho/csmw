@@ -16,12 +16,12 @@ INCLUDE += -I../smw/eventloop
 INCLUDE += -I../smw/ini
 INCLUDE += -I../smw/logger
 INCLUDE += -I../smw/thread
-INCLUDE += -I../drivers/IMU -I../drivers/IMU/WT61
+INCLUDE += -I../drivers/IMU -I../drivers/IMU/WT61 -I../drivers/IMU/H30
 INCLUDE += -I../drivers/Speed -I../drivers/Speed/BRT38 -I../drivers/Speed/OID-R5008D
 
 # ==================== 源文件收集 ====================
 SMW_SRCS   := $(wildcard ../smw/**/*.cpp)
-IMU_SRCS   := $(wildcard ../drivers/IMU/WT61/*.cpp)
+IMU_SRCS   := $(wildcard ../drivers/IMU/WT61/*.cpp) $(wildcard ../drivers/IMU/H30/*.cpp)
 SPEED_SRCS := $(wildcard ../drivers/Speed/BRT38/*.cpp) $(wildcard ../drivers/Speed/OID-R5008D/*.cpp)
 
 LIB_SRCS   := $(SMW_SRCS) $(IMU_SRCS) $(SPEED_SRCS)

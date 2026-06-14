@@ -96,6 +96,21 @@ void InitCallbackRegistry() {
     g_error_callbacks["OID_R5008D"] = [](const std::string& name, int code) {
         log_error("[OID_R5008D] 错误: %s (code=%d)", name.c_str(), code);
     };
+
+    // ── H30 IMU 传感器 ──
+    g_data_callbacks["H30"] = [](const DataBase* data) {
+        const ImuData* idata = dynamic_cast<const ImuData*>(data);
+        if (idata) {
+            printf("[%s] [H30] 帧%d | Pitch:%.2f° Roll:%.2f° Yaw:%.2f° | TID:%d\n",
+                   GetTimestamp().c_str(),
+                   idata->frameId,
+                   idata->pitch, idata->roll, idata->yaw,
+                   GetCurrentThreadId());
+        }
+    };
+    g_error_callbacks["H30"] = [](const std::string& name, int code) {
+        log_error("[H30] 错误: %s (code=%d)", name.c_str(), code);
+    };
 }
 
 // ==================== 从 INI 遍历注册驱动 ====================
