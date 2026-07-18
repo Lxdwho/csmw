@@ -1,6 +1,6 @@
 /**
- * @brief:CH340串口重写sensor_driver基类?
- * 用户态驱动框架开发
+ * @brief WT61基础驱动
+ * @date  2026.07.18
  */
 #pragma once
 
@@ -8,10 +8,10 @@
 #include "../../../smw/classFactory/ClassFactory.h"
 #include "../../../smw/logger/log.h"
 
+#define WT_PACK_LEN 11
+
 using namespace smw;
 
-/* 继承 + 虚函数重写 */
-/* 无论是哪种类型的设备（USB\NET)都继承这个SensorBase基类，因为只需要实现这个基类的四个接口功能就行. */
 class WT61 :  public SensorBase {
 public:
     WT61(const std::string& name, const std::string& devnode);
@@ -26,15 +26,22 @@ public:
 
     /* SubLoop 接口 */
     int fd() const override { return fd_; }
-    int ReadData() override;  // 非阻塞读取，触发 on_data_ 回调
+    int ReadData() override;
+
+    bool parseFullImuFrame(const uint8_t* buf, int bufLen, ImuData& out);
+    bool parseWtSinglePacket(const uint8_t* pkt, ImuData& out);
+
+    int16_t getInt16(uint8_t low, uint8_t high) {
+        uint16_t raw = (static_cast<uint16_t>(high) << 8) | low;
+        return static_cast<int16_t>(raw);
+    }
 
 private:
     int fd_;
+    uint8_t buffer_[1024];
+    uint8_t bufIdx = 0;
+    const uint8_t unlockCmd[5] = { 0xFFU, 0xAAU, 0x69U, 0x88U, 0xB5U };
+    const uint8_t speedCmd[5]  = { 0xFFU, 0xAAU, 0x03U, 0x08U, 0x00U };
+    const uint8_t saveCmd[5]   = { 0xFFU, 0xAAU, 0x00U, 0x00U, 0x00U };
 };
-
-/*
- * 向 SensorBase 工厂注册 WT61 子类，
-    (把 WT61 的创建方法注册给工厂)
- * 后续可通过字符串动态创建 WT61 对象(可多个)
- */
 CLASS_LOADER_REGISTER_CLASS(WT61, SensorBase)
