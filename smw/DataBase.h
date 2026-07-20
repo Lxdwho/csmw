@@ -134,6 +134,26 @@ struct SpeedData : public DataBase
    _Float64 angle; // 单圈角度
 };
 
+/* 触觉传感器 V1 数据结构（CASIA_V1：5 红外 + 19 触觉） */
+struct tactileData : public DataBase
+{
+   float infrared[5] = {0};
+   float tactile[19] = {0};
+};
+
+/* 触觉传感器单点 */
+struct TactilePoint {
+   int x = 0;
+   int y = 0;
+   float tactile = 0.0f;
+};
+
+/* 触觉传感器 V2 数据结构（CASIA_V2：6×6 网格） */
+struct tactile2Data : public DataBase
+{
+   std::vector<TactilePoint> points;
+};
+
 } // namespace smw
 
 #endif // _SMW_DATABASE_H_

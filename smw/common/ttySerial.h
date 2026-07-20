@@ -84,6 +84,9 @@ class ttySerial {
       case 460800:
         baud_rate = B460800;
         break;
+      case 576000:
+        baud_rate = B576000;
+        break;
       case 921600:
         baud_rate = B921600;
         break;
