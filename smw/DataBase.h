@@ -37,10 +37,6 @@ struct ImuData : public DataBase {
    float roll;                     
    float pitch;
    float yaw;
-   // int64_t Timestamp;           // 数据的时间戳
-   // float imu_temperature;       // 如果IMU数据由多个传感器组成则该值为这些传感器的平均温度
-   // float Pressure;              // 气压值
-   // float pressure_temperature;  // 气压计的温度值
 };
 
 struct LidarScan :public DataBase 
@@ -118,14 +114,17 @@ struct PowerData : public DataBase
 struct GpsData : public DataBase
 {
    uint64_t timestamp;
-   _Float64  latitude;   //纬度
-   _Float64  longitude;  //经度
-   _Float64  altitude;   //海拔
+   _Float64  latitude;   //纬度（度）
+   _Float64  longitude;  //经度（度）
+   _Float64  altitude;   //海拔（米）
     bool   sentenceHasFix; // 定位是否有效
     size_t satellites;  //卫星数量
-   _Float64 hdop;
-   _Float64 speed;      //水平速率
-   _Float64 course;     //地面航向
+   _Float64 hdop;       //精度因子
+   _Float64 speed;      //水平速率（km/h）
+   _Float64 course;     //地面航向（度）
+   std::string UTCTime; //UTC时间 hhmmss.ss
+   std::string N_S;     //北纬/南纬 N/S
+   std::string E_W;     //东经/西经 E/W
 };
 
 /* 速度传感器数据结构定义 */
