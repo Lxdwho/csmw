@@ -62,12 +62,15 @@ private:
         std::string devnode;
         std::string vendor_id;
         std::string product_id;
+        std::string interface;   // 网络子系统：网口名
+        int link = -1;           // 网络子系统：1=link up, 0=link down
     };
     DeviceInfo ParseDeviceEvent(void* udev_dev);
 
     const DriverEntry* FindDriver(const std::string& subsystem,
                                   const std::string& vendor_id,
                                   const std::string& product_id);
+    const DriverEntry* FindDriverByInterface(const std::string& interface_name);
 
     void AddSensor(const std::string& subsystem,
                    const std::string& vendor_id,

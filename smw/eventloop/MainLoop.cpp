@@ -147,22 +147,43 @@ bool MainLoop::handleUdevEvent() {
 
     if (info.devnode.empty()) return true;
 
-    if (info.action == "bind" || (info.subsystem == "tty" && info.action == "add")) {
-        log_info("[Manager] 设备插入: %s (%s:%s)",
-                 info.devnode.c_str(), info.vendor_id.c_str(),
-                 info.product_id.c_str());
+    /* ====== 串口/USB 子系统（原有逻辑） ====== */
+    if (info.subsystem == "tty" || info.subsystem == "usb") {
+        if (info.action == "bind" || (info.subsystem == "tty" && info.action == "add")) {
+            log_info("[Manager] 设备插入: %s (%s:%s)",
+                     info.devnode.c_str(), info.vendor_id.c_str(),
+                     info.product_id.c_str());
 
-        if (FindDriver(info.subsystem, info.vendor_id, info.product_id)) {
-            AddSensor(info.subsystem, info.vendor_id, info.product_id, info.devnode);
-        } else {
-            log_info("[Manager] 驱动监听未被注册 (子系统=%s, VID=%s, PID=%s)",
-                     info.subsystem.c_str(), info.vendor_id.c_str(), info.product_id.c_str());
+            if (FindDriver(info.subsystem, info.vendor_id, info.product_id)) {
+                AddSensor(info.subsystem, info.vendor_id, info.product_id, info.devnode);
+            } else {
+                log_info("[Manager] 驱动监听未被注册 (子系统=%s, VID=%s, PID=%s)",
+                         info.subsystem.c_str(), info.vendor_id.c_str(), info.product_id.c_str());
+            }
+        }
+        else if (info.action == "remove") {
+            log_info("\n[Manager] 设备移除: %s", info.devnode.c_str());
+            RemoveSensor(info.devnode);
         }
     }
-    else if (info.action == "remove") {
-        log_info("\n[Manager] 设备移除: %s", info.devnode.c_str());
-        RemoveSensor(info.devnode);
+    /* ====== 网络子系统（新增：按 interface 匹配） ====== */
+    else if (info.subsystem == "net") {
+        if (info.interface.empty()) return true;
+
+        if (info.action == "change" && info.link == 1) {
+            log_info("[Manager] 网口连接: %s (link up)", info.interface.c_str());
+
+            const DriverEntry* entry = FindDriverByInterface(info.interface);
+            if (entry) {
+                AddSensor(entry->subsystem, "", "", info.interface);
+            }
+        }
+        else if (info.action == "change" && info.link == 0) {
+            log_info("[Manager] 网口断开: %s (link down)", info.interface.c_str());
+            RemoveSensor(info.interface);
+        }
     }
+
     return true;
 }
 
@@ -181,6 +202,20 @@ MainLoop::DeviceInfo MainLoop::ParseDeviceEvent(void* udev_dev) {
     if (devnode) info.devnode = devnode;
     if (vendor_id) info.vendor_id = vendor_id;
     if (product_id) info.product_id = product_id;
+
+    /* 网络子系统：提取网口名和 link 状态 */
+    if (info.subsystem == "net") {
+        const char* iface = ::udev_device_get_property_value(dev, "INTERFACE");
+        if (iface) info.interface = iface;
+
+        const char* link_str = ::udev_device_get_property_value(dev, "ID_NET_LINK");
+        if (link_str) info.link = atoi(link_str);
+
+        /* net 子系统的 devnode 用 interface 名 */
+        if (info.devnode.empty() && !info.interface.empty()) {
+            info.devnode = info.interface;
+        }
+    }
 
     return info;
 }
@@ -233,6 +268,14 @@ const DriverEntry* MainLoop::FindDriver(const std::string& subsystem,
         if (!entry.vendor_id.empty() && entry.vendor_id != vendor_id) continue;
         if (!entry.product_id.empty() && entry.product_id != product_id) continue;
         return &entry;
+    }
+    return nullptr;
+}
+
+const DriverEntry* MainLoop::FindDriverByInterface(const std::string& interface_name) {
+    for (const auto& entry : driver_registry_) {
+        if (entry.subsystem != "net") continue;
+        if (entry.interface == interface_name) return &entry;
     }
     return nullptr;
 }

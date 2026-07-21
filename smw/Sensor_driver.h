@@ -155,6 +155,7 @@ struct DriverEntry {
     std::string vendor_id;
     std::string product_id;
     std::string driver_name;
+    std::string interface;     // 网络传感器：匹配网口名（如 "eth1"），空表示串口
     int writeIntervalMs = 0;   // 请求-响应型传感器写间隔（ms），0 = 纯流式
     OnSensorData onData;
     OnSensorError onError;
