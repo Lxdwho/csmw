@@ -41,10 +41,7 @@ int CasTouchV2::Init() {
 
     IniFile* ini = IniFile::Get_instance();
     if (ini && ini->has(name_, "baud_rate")) {
-        std::string br = (std::string)ini->get(name_, "baud_rate");
-        if (!br.empty()) {
-            baudRate_ = std::stoi(br);
-        }
+        baudRate_ = (int)ini->get(name_, "baud_rate");
     }
 
     int fd = serial_.Open(devnode_, baudRate_);
