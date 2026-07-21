@@ -111,6 +111,81 @@ void InitCallbackRegistry() {
     g_error_callbacks["H30"] = [](const std::string& name, int code) {
         log_error("[H30] 错误: %s (code=%d)", name.c_str(), code);
     };
+
+    // ── CasTouchV1 触觉传感器 ──
+    g_data_callbacks["CasTouchV1"] = [](const DataBase* data) {
+        const tactileData* td = dynamic_cast<const tactileData*>(data);
+        if (td) {
+            printf("[%s] [CasTouchV1] 帧%d | ir[0]:%.2f t[0]:%.2f | TID:%d\n",
+                   GetTimestamp().c_str(),
+                   td->frameId,
+                   td->infrared[0], td->tactile[0],
+                   GetCurrentThreadId());
+        }
+    };
+    g_error_callbacks["CasTouchV1"] = [](const std::string& name, int code) {
+        log_error("[CasTouchV1] 错误: %s (code=%d)", name.c_str(), code);
+    };
+
+    // ── CasTouchV2 触觉传感器 ──
+    g_data_callbacks["CasTouchV2"] = [](const DataBase* data) {
+        const tactile2Data* td = dynamic_cast<const tactile2Data*>(data);
+        if (td && !td->points.empty()) {
+            printf("[%s] [CasTouchV2] 帧%d | points:%zu t[0]:%.2f | TID:%d\n",
+                   GetTimestamp().c_str(),
+                   td->frameId,
+                   td->points.size(), td->points[0].tactile,
+                   GetCurrentThreadId());
+        }
+    };
+    g_error_callbacks["CasTouchV2"] = [](const std::string& name, int code) {
+        log_error("[CasTouchV2] 错误: %s (code=%d)", name.c_str(), code);
+    };
+
+    // ── LIJU 力矩传感器 ──
+    g_data_callbacks["LIJU"] = [](const DataBase* data) {
+        const PowerData* pd = dynamic_cast<const PowerData*>(data);
+        if (pd) {
+            printf("[%s] [LIJU] 帧%d | fx:%.2f fy:%.2f fz:%.2f Mx:%.2f My:%.2f Mz:%.2f | TID:%d\n",
+                   GetTimestamp().c_str(),
+                   pd->frameId,
+                   pd->fx, pd->fy, pd->fz, pd->Mx, pd->My, pd->Mz,
+                   GetCurrentThreadId());
+        }
+    };
+    g_error_callbacks["LIJU"] = [](const std::string& name, int code) {
+        log_error("[LIJU] 错误: %s (code=%d)", name.c_str(), code);
+    };
+
+    // ── SMS 力矩传感器 ──
+    g_data_callbacks["SMS"] = [](const DataBase* data) {
+        const PowerData* pd = dynamic_cast<const PowerData*>(data);
+        if (pd) {
+            printf("[%s] [SMS] 帧%d | fx:%.2f fy:%.2f fz:%.2f Mx:%.2f My:%.2f Mz:%.2f | TID:%d\n",
+                   GetTimestamp().c_str(),
+                   pd->frameId,
+                   pd->fx, pd->fy, pd->fz, pd->Mx, pd->My, pd->Mz,
+                   GetCurrentThreadId());
+        }
+    };
+    g_error_callbacks["SMS"] = [](const std::string& name, int code) {
+        log_error("[SMS] 错误: %s (code=%d)", name.c_str(), code);
+    };
+
+    // ── NBIT 网口力矩传感器 ──
+    g_data_callbacks["NBIT"] = [](const DataBase* data) {
+        const PowerData* pd = dynamic_cast<const PowerData*>(data);
+        if (pd) {
+            printf("[%s] [NBIT] 帧%d | fx:%.2f fy:%.2f fz:%.2f Mx:%.2f My:%.2f Mz:%.2f | TID:%d\n",
+                   GetTimestamp().c_str(),
+                   pd->frameId,
+                   pd->fx, pd->fy, pd->fz, pd->Mx, pd->My, pd->Mz,
+                   GetCurrentThreadId());
+        }
+    };
+    g_error_callbacks["NBIT"] = [](const std::string& name, int code) {
+        log_error("[NBIT] 错误: %s (code=%d)", name.c_str(), code);
+    };
 }
 
 // ==================== 从 INI 遍历注册驱动 ====================
@@ -143,6 +218,10 @@ int RegisterDriversFromIni(MainLoop& mainLoop) {
         entry.product_id  = (std::string)ini->get(section, "product_id");
         entry.driver_name = driver_name;
 
+        if (ini->has(section, "interface")) {
+            entry.interface = (std::string)ini->get(section, "interface");
+        }
+
         // 从注册表取回调
         auto data_it = g_data_callbacks.find(driver_name);
         auto err_it  = g_error_callbacks.find(driver_name);
@@ -157,12 +236,20 @@ int RegisterDriversFromIni(MainLoop& mainLoop) {
         }
 
         mainLoop.RegisterDriver(entry);
-        printf("  ✓ [%s] %s (subsystem=%s, VID=%s, PID=%s)\n",
-               section.c_str(),
-               driver_name.c_str(),
-               entry.subsystem.c_str(),
-               entry.vendor_id.empty() ? "*" : entry.vendor_id.c_str(),
-               entry.product_id.empty() ? "*" : entry.product_id.c_str());
+        if (!entry.interface.empty()) {
+            printf("  ✓ [%s] %s (subsystem=%s, interface=%s)\n",
+                   section.c_str(),
+                   driver_name.c_str(),
+                   entry.subsystem.c_str(),
+                   entry.interface.c_str());
+        } else {
+            printf("  ✓ [%s] %s (subsystem=%s, VID=%s, PID=%s)\n",
+                   section.c_str(),
+                   driver_name.c_str(),
+                   entry.subsystem.c_str(),
+                   entry.vendor_id.empty() ? "*" : entry.vendor_id.c_str(),
+                   entry.product_id.empty() ? "*" : entry.product_id.c_str());
+        }
         count++;
     }
 
