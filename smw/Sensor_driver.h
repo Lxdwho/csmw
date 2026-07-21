@@ -11,6 +11,7 @@
 #define _SMW_SENSORDRIVER_H_
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <functional>
@@ -58,9 +59,21 @@ public:
     virtual int fd() const { return -1; }
     virtual int ReadData() { return 0; }
 
-    /* 请求-响应传感器接口（需要先发后收的传感器重写这两个）*/
-    virtual bool wantsWrite() const { return false; }  // 告诉 SubLoop 是否想写
-    virtual int WriteData() { return 0; }              // 可写时调用
+    /* 请求-响应传感器接口 */
+    virtual bool wantsWrite() const {
+        if (!writeRequested_) return false;
+        if (writeIntervalMs_ <= 0) return true;
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - lastWriteTime_).count();
+        return elapsed >= writeIntervalMs_;
+    }
+    virtual int WriteData() { return 0; }
+
+    /* 请求-响应调度 API */
+    void requestWrite() { writeRequested_ = true; }
+    void setWriteInterval(int ms) { writeIntervalMs_ = ms; }
+    int getWriteInterval() const { return writeIntervalMs_; }
 
     /* 状态查询 */
     SensorStatus GetStatus() const { return status_; }
@@ -120,9 +133,20 @@ protected:
         latestData_ = std::move(data);
     }
 
+    /* 子类在 WriteData() 中调用，标记写完成 */
+    void markWriteDone() {
+        writeRequested_ = false;
+        lastWriteTime_ = std::chrono::steady_clock::now();
+    }
+
 private:
     mutable std::mutex dataMtx_;
     std::shared_ptr<DataBase> latestData_;  // 最新一帧数据（拉模式用）
+
+    /* 请求-响应节流 */
+    mutable bool writeRequested_ = false;
+    int writeIntervalMs_ = 0;
+    std::chrono::steady_clock::time_point lastWriteTime_;
 };
 
 /* 驱动注册表 */
@@ -131,6 +155,7 @@ struct DriverEntry {
     std::string vendor_id;
     std::string product_id;
     std::string driver_name;
+    int writeIntervalMs = 0;   // 请求-响应型传感器写间隔（ms），0 = 纯流式
     OnSensorData onData;
     OnSensorError onError;
 };

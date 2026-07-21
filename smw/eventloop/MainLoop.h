@@ -26,6 +26,7 @@
 #include <string>
 #include <vector>
 #include <libudev.h>
+#include <sys/timerfd.h>
 
 namespace smw       {
 namespace eventloop {
@@ -74,6 +75,18 @@ private:
                    const std::string& devnode);
     void RemoveSensor(const std::string& devnode);
 
+    /* timerfd 定时写调度 */
+    void handleTimerEvent();
+    void updateTimerfd();
+    static int gcd(int a, int b) { return b == 0 ? a : gcd(b, a % b); }
+
+    struct WriteScheduleEntry {
+        SubLoop* loop;
+        SensorBase* driver;
+        int intervalMs;
+        int elapsedMs;  // 自上次写以来累计的毫秒数
+    };
+
     /* 成员 */
     std::vector<DriverEntry> driver_registry_;
     std::map<std::string, SubLoop*> slotMap_;
@@ -82,6 +95,10 @@ private:
     ::udev* udev_;
     ::udev_monitor* udev_mon_;
     bool sacndevice_;
+
+    int timerfd_ = -1;
+    int timerIntervalMs_ = 0;
+    std::vector<WriteScheduleEntry> writeSchedule_;
 };
 
 } // namespace eventloop

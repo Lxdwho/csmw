@@ -11,6 +11,7 @@
 #include "../classFactory/ClassFactory.h"
 #include "../logger/log.h"
 
+#include <algorithm>
 #include <cstring>
 #include <unistd.h>
 
@@ -77,6 +78,14 @@ int MainLoop::Start() {
         getPoller()->addFd(udev_fd, POLLIN);
     }
 
+    /* 创建 timerfd（请求-响应型传感器定时写调度） */
+    timerfd_ = ::timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+    if (timerfd_ >= 0) {
+        getPoller()->addFd(timerfd_, POLLIN);
+    } else {
+        log_error("[Manager] timerfd 创建失败，请求-响应型传感器将不可用");
+    }
+
     ioThreadPool_.start();
 
     if (!ScanAllDevice()) {
@@ -90,7 +99,12 @@ int MainLoop::Start() {
 
 void MainLoop::Stop() {
     slotMap_.clear();
+    writeSchedule_.clear();
 
+    if (timerfd_ >= 0) {
+        ::close(timerfd_);
+        timerfd_ = -1;
+    }
     if (udev_mon_) {
         ::udev_monitor_unref(udev_mon_);
         udev_mon_ = nullptr;
@@ -114,6 +128,9 @@ void MainLoop::handleEvents(Poller* poller) {
     poller->forEachReadyFd([this, udev_fd](int fd, short revents) -> bool {
         if (fd == udev_fd && (revents & POLLIN)) {
             while (handleUdevEvent()) {}
+        }
+        else if (fd == timerfd_ && (revents & POLLIN)) {
+            handleTimerEvent();
         }
         return true;
     });
@@ -267,9 +284,29 @@ void MainLoop::AddSensor(const std::string& subsystem,
     /* 记录映射 */
     slotMap_[devnode] = ioLoop;
 
+    /* 保存驱动指针，Init 之后用于注册写调度 */
+    SensorBase* driverRaw = slot->driver.get();
+
     /* 投递给 SubLoop：Init → Start → 注册 fd，全在 SubLoop 线程完成 */
-    ioLoop->queueInLoop([ioLoop, slot]() {
+    ioLoop->queueInLoop([this, ioLoop, slot, driverRaw, devnode]() {
         ioLoop->addSensorSlot(slot);
+
+        /* Init 完成后，检查驱动是否设置了写间隔 */
+        int writeMs = driverRaw->getWriteInterval();
+        if (writeMs > 0) {
+            /* 回到 MainLoop 线程注册写调度 */
+            this->queueInLoop([this, driverRaw, ioLoop, devnode, writeMs]() {
+                WriteScheduleEntry entry;
+                entry.loop = ioLoop;
+                entry.driver = driverRaw;
+                entry.intervalMs = writeMs;
+                entry.elapsedMs = 0;
+                writeSchedule_.push_back(entry);
+                updateTimerfd();
+                log_info("[Manager] 传感器 %s 注册定时写调度 (间隔=%d ms)",
+                         devnode.c_str(), writeMs);
+            });
+        }
     });
 
     log_info("\n[Manager] 传感器 %s 已投递到 SubLoop (驱动=%s, SubLoop=%p)",
@@ -286,12 +323,79 @@ void MainLoop::RemoveSensor(const std::string& devnode) {
     SubLoop* ioLoop = it->second;
     slotMap_.erase(it);
 
+    /* 从写调度中移除 */
+    writeSchedule_.erase(
+        std::remove_if(writeSchedule_.begin(), writeSchedule_.end(),
+            [&](const WriteScheduleEntry& e) {
+                return e.driver->GetDevnode() == devnode;
+            }),
+        writeSchedule_.end());
+    updateTimerfd();
+
     /* 投递给 SubLoop：Stop → Release → 移除，全在 SubLoop 线程完成 */
     ioLoop->queueInLoop([ioLoop, devnode]() {
         ioLoop->removeSensorSlot(devnode);
     });
 
     log_info("[Manager] 传感器 %s 移除指令已投递到 SubLoop", devnode.c_str());
+}
+
+// ==================== timerfd 定时写调度 ====================
+
+void MainLoop::handleTimerEvent() {
+    if (timerfd_ < 0) return;
+
+    /* 必须读 timerfd，否则会一直触发 */
+    uint64_t expirations;
+    ::read(timerfd_, &expirations, sizeof(expirations));
+
+    for (auto& entry : writeSchedule_) {
+        entry.elapsedMs += timerIntervalMs_;
+        if (entry.elapsedMs >= entry.intervalMs) {
+            entry.elapsedMs = 0;
+            SensorBase* driver = entry.driver;
+            SubLoop* loop = entry.loop;
+            loop->queueInLoop([driver]() {
+                // 驱动已被 Stop/Release 时跳过（RemoveSensor 竞态保护）
+                if (driver->GetStatus() != SensorStatus::kCapturing) return;
+                if (driver->wantsWrite()) {
+                    driver->WriteData();
+                }
+            });
+        }
+    }
+}
+
+void MainLoop::updateTimerfd() {
+    if (timerfd_ < 0) return;
+
+    if (writeSchedule_.empty()) {
+        /* 无请求-响应传感器，停止定时器 */
+        struct itimerspec ts = {};
+        ::timerfd_settime(timerfd_, 0, &ts, nullptr);
+        timerIntervalMs_ = 0;
+        return;
+    }
+
+    /* 计算所有间隔的 GCD */
+    int g = writeSchedule_[0].intervalMs;
+    for (size_t i = 1; i < writeSchedule_.size(); i++) {
+        g = gcd(g, writeSchedule_[i].intervalMs);
+    }
+    if (g <= 0) g = 1;
+
+    if (g == timerIntervalMs_) return;  /* 间隔没变，不重设 */
+
+    timerIntervalMs_ = g;
+    struct itimerspec ts;
+    ts.it_value.tv_sec = g / 1000;
+    ts.it_value.tv_nsec = (g % 1000) * 1000000L;
+    ts.it_interval.tv_sec = ts.it_value.tv_sec;
+    ts.it_interval.tv_nsec = ts.it_value.tv_nsec;
+    ::timerfd_settime(timerfd_, 0, &ts, nullptr);
+
+    log_info("[Manager] timerfd 间隔更新: %d ms (GCD), %zu 个请求-响应传感器",
+             timerIntervalMs_, writeSchedule_.size());
 }
 
 // ==================== 查询 ====================

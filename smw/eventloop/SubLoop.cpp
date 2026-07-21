@@ -116,11 +116,9 @@ void SubLoop::registerFds(Poller* poller) {
         int fd = slot->driver->fd();
         if (fd < 0) continue;
 
-        short events = POLLIN;
-        if (slot->driver->wantsWrite()) {
-            events |= POLLOUT;
-        }
-        poller->addFd(fd, events);
+        // 只监听 POLLIN，不注册 POLLOUT（串口永远可写，注册会导致忙循环）
+        // 请求-响应型传感器的写由 MainLoop timerfd 通过 queueInLoop 投递
+        poller->addFd(fd, POLLIN);
     }
 }
 
@@ -136,11 +134,8 @@ void SubLoop::handleEvents(Poller* poller) {
 
         auto& driver = ownedSlots_[idx]->driver;
 
-        if (revents & POLLOUT) {
-            driver->WriteData();   // 可写 → 发请求
-        }
         if (revents & POLLIN) {
-            driver->ReadData();    // 可读 → 收响应
+            driver->ReadData();    // 可读 → 收数据 / 收响应
         }
         return true;
     });
