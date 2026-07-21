@@ -16,15 +16,21 @@ INCLUDE += -I../smw/eventloop
 INCLUDE += -I../smw/ini
 INCLUDE += -I../smw/logger
 INCLUDE += -I../smw/thread
-INCLUDE += -I../drivers/IMU -I../drivers/IMU/WT61 -I../drivers/IMU/H30
-INCLUDE += -I../drivers/Speed -I../drivers/Speed/BRT38 -I../drivers/Speed/OID-R5008D
+INCLUDE += -I../drivers/IMU 	-I../drivers/IMU/WT61 			-I../drivers/IMU/H30
+INCLUDE += -I../drivers/Speed 	-I../drivers/Speed/BRT38 		-I../drivers/Speed/OID-R5008D
+INCLUDE += -I../drivers/GPS 	-I../drivers/GPS/BDGPS 			-I../drivers/GPS/ATGM336H
+INCLUDE += -I../drivers/Touch 	-I../drivers/Touch/CasTouchV1 	-I../drivers/Touch/CasTouchV2
+INCLUDE += -I../drivers/Power 	-I../drivers/Power/LIJU-hyxw-x6 -I../drivers/Power/SMS-00017D
 
 # ==================== 源文件收集 ====================
 SMW_SRCS   := $(wildcard ../smw/**/*.cpp)
-IMU_SRCS   := $(wildcard ../drivers/IMU/WT61/*.cpp) $(wildcard ../drivers/IMU/H30/*.cpp)
-SPEED_SRCS := $(wildcard ../drivers/Speed/BRT38/*.cpp) $(wildcard ../drivers/Speed/OID-R5008D/*.cpp)
+IMU_SRCS   := $(wildcard ../drivers/IMU/WT61/*.cpp) 			$(wildcard ../drivers/IMU/H30/*.cpp)
+SPEED_SRCS := $(wildcard ../drivers/Speed/BRT38/*.cpp) 			$(wildcard ../drivers/Speed/OID-R5008D/*.cpp)
+GPS_SRCS   := $(wildcard ../drivers/GPS/BDGPS/*.cpp) 			$(wildcard ../drivers/GPS/ATGM336H/*.cpp)
+TOUCH_SRCS := $(wildcard ../drivers/Touch/CasTouchV1/*.cpp) 	$(wildcard ../drivers/Touch/CasTouchV2/*.cpp)
+POWER_SRCS := $(wildcard ../drivers/Power/LIJU-hyxw-x6/*.cpp) 	$(wildcard ../drivers/Power/CasTouchV2/*.cpp)
 
-LIB_SRCS   := $(SMW_SRCS) $(IMU_SRCS) $(SPEED_SRCS)
+LIB_SRCS   := $(SMW_SRCS) $(IMU_SRCS) $(SPEED_SRCS) $(GPS_SRCS) $(TOUCH_SRCS) $(POWER_SRCS)
 MAIN_SRCS  := main.cpp
 ALL_SRCS   := $(LIB_SRCS) $(MAIN_SRCS)
 
